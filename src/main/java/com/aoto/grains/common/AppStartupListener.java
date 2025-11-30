@@ -1,4 +1,4 @@
-package com.aoto.grains;
+package com.aoto.grains.common;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

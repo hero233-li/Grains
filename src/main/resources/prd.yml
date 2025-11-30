@@ -1,0 +1,3 @@
+app:
+  taobao-url: https://api.taobao.com/router/rest  # 假设生产环境是另一个地址
+  baidu-url: https://openapi.baidu.com/rest/2.0/...

@@ -15,9 +15,10 @@ import org.springframework.web.client.RestTemplate;
 @Configuration
 public class AppConfig{
     @Bean
-    public RestTemplate restTemplate(){
+    public RestTemplate restTemplate(AppProperties appProperties){
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(5000);
+        int timeout = (appProperties.getTimeout() != null) ? appProperties.getTimeout() : 5000;
+        factory.setConnectTimeout(timeout);
         // 连接超时 5秒
         factory.setReadTimeout(5000);
         // 读取超时 5秒

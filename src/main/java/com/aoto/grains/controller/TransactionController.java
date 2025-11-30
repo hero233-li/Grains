@@ -1,4 +1,4 @@
-package com.aoto.grains;
+package com.aoto.grains.controller;
 
 import org.springframework.web.bind.annotation.*;
 
