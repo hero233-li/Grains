@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinDebug Pro (状态样式优化版)</title>
+    <style>
+        /* ================= 重置与基础样式 ================= */
+        :root {
+            --primary: #1677ff;
+            --primary-hover: color-mix(in srgb, var(--primary), white 20%);
+
+            --sidebar-bg: #001529;
+            --sidebar-header: #002140;
+            --bg-body: #f0f2f5;
+            --text-main: #333;
+            --text-secondary: #666;
+            --border-color: #e5e7eb;
+            --success-text: #389e0d; /* 纯文本模式下的绿色 */
+            --error-text: #cf1322;   /* 纯文本模式下的红色 */
+            --processing-text: #1677ff;
+            --waiting-text: #999;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", sans-serif; }
+        body { background-color: var(--bg-body); color: var(--text-main); height: 100vh; overflow: hidden; display: flex; }
+
+        /* ================= 布局 ================= */
+        .sidebar { width: 256px; background-color: var(--sidebar-bg); color: white; display: flex; flex-direction: column; flex-shrink: 0; transition: width 0.3s; }
+        .sidebar-header { height: 64px; background-color: var(--sidebar-header); display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .logo-box { width: 32px; height: 32px; background: var(--primary); border-radius: 6px; display: flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 14px; }
+
+        .nav-menu { flex: 1; overflow-y: auto; padding: 16px 0; }
+        .nav-item { display: flex; align-items: center; padding: 12px 24px; color: #a6adb4; text-decoration: none; font-size: 14px; transition: all 0.3s; cursor: pointer; }
+        .nav-item:hover { color: white; background-color: rgba(255,255,255,0.1); }
+        .nav-item.active { background-color: var(--primary); color: white; border-right: 4px solid white; }
+        .nav-item svg { margin-right: 12px; width: 18px; height: 18px; }
+
+        .sidebar-footer { padding: 16px; border-top: 1px solid rgba(255,255,255,0.1); text-align: center; font-size: 12px; color: #666; }
+
+        .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+
+        .header { height: 64px; background: white; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; flex-shrink: 0; }
+        .page-title { font-size: 18px; font-weight: 600; }
+
+        .header-right { display: flex; align-items: center; gap: 24px; }
+        .env-selector { display: flex; align-items: center; gap: 8px; }
+
+        /* ================= 下拉框美化 ================= */
+        .env-select, .select {
+            appearance: none; -webkit-appearance: none; -moz-appearance: none;
+            padding: 8px 36px 8px 12px; font-size: 14px; border: 1px solid var(--border-color); border-radius: 6px; background-color: white; color: var(--text-main); outline: none; cursor: pointer; transition: all 0.2s; height: 40px;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280' stroke-width='2'%3e%3cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3e%3c/svg%3e");
+            background-repeat: no-repeat; background-position: right 12px center; background-size: 16px;
+        }
+        .env-select { padding: 6px 32px 6px 12px; height: 32px; font-size: 13px; background-size: 14px; }
+        .env-select:hover, .select:hover { border-color: #b0b0b0; background-color: #fafafa; }
+        .env-select:focus, .select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.1); background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%231677ff' stroke-width='2'%3e%3cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3e%3c/svg%3e"); }
+
+        .content-scroll { flex: 1; overflow-y: auto; padding: 24px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+
+        .page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; border-bottom: 1px solid var(--border-color); padding-bottom: 20px; }
+        .ph-title { font-size: 24px; font-weight: 700; color: #1f2937; }
+        .ph-desc { color: var(--text-secondary); margin-top: 4px; font-size: 14px; }
+        .api-badge { background: #f3f4f6; color: #4b5563; padding: 4px 8px; border-radius: 4px; font-family: monospace; font-size: 12px; }
+
+        .card { background: white; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: 0 1px 2px rgba(0,0,0,0.05); overflow: hidden; margin-bottom: 24px; }
+        .card-header { background: #f9fafb; padding: 16px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
+        .card-title { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+        .card-body { padding: 24px; }
+
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 24px; }
+        .form-group { display: flex; flex-direction: column; gap: 6px; }
+        .label { font-size: 14px; font-weight: 500; color: #374151; }
+        .required { color: #ef4444; }
+
+        .input { height: 40px; padding: 0 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; outline: none; transition: all 0.2s; width: 100%; }
+        /* 文件输入框 */
+        input[type="file"].input { padding: 6px; line-height: 24px; background: #fff; }
+        input[type="file"]::file-selector-button { margin-right: 12px; border: none; background: #f3f4f6; padding: 4px 12px; border-radius: 4px; color: #374151; cursor: pointer; transition: 0.2s; font-size: 12px; }
+        input[type="file"]::file-selector-button:hover { background: #e5e7eb; }
+
+        .input:hover { border-color: #b0b0b0; }
+        .input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.1); }
+
+        .form-footer { margin-top: 32px; display: flex; justify-content: flex-end; }
+        .btn-submit { background: var(--primary); color: white; border: none; padding: 10px 24px; border-radius: 8px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: 0.2s; }
+        .btn-submit:hover { background: var(--primary-hover); transform: translateY(-1px); }
+        .btn-submit:disabled { opacity: 0.7; cursor: not-allowed; }
+        .btn-submit svg { width: 16px; height: 16px; display: block; }
+
+        .table-container { overflow-x: auto; min-height: 200px; }
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 12px 24px; background: #f9fafb; font-size: 12px; color: #6b7280; text-transform: uppercase; font-weight: 500; }
+        td { padding: 16px 24px; border-top: 1px solid var(--border-color); font-size: 14px; }
+        tr:hover { background: #f9fafb; }
+
+        /* ================= 状态样式修复 (Text Only) ================= */
+        .status-badge {
+            padding: 0;             /* 移除内边距，大小与文字一致 */
+            border-radius: 0;       /* 移除圆角 */
+            font-size: inherit;     /* 字体大小继承父元素 (随字体变化) */
+            font-weight: 500;       /* 保持适度加粗 */
+            background: transparent;/* 移除背景色 */
+            display: inline;        /* 确保像普通文本一样显示 */
+        }
+        .status-success {
+            color: var(--success-text);
+        }
+        .status-error {
+            color: var(--error-text);
+        }
+
+        .btn-link { background: none; border: none; color: var(--primary); cursor: pointer; font-size: 14px; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+        .btn-link:hover { text-decoration: underline; color: var(--primary-hover); }
+        .btn-link svg { width: 14px; height: 14px; flex-shrink: 0; display: block; }
+
+        .pagination { display: flex; align-items: center; justify-content: flex-end; padding: 16px 24px; border-top: 1px solid var(--border-color); gap: 16px; font-size: 14px; color: #666; }
+        .page-btn { padding: 4px 12px; border: 1px solid #d1d5db; border-radius: 4px; background: white; cursor: pointer; font-size: 13px; transition: 0.2s; }
+        .page-btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+        .page-btn:disabled { opacity: 0.5; cursor: not-allowed; background: #f3f4f6; }
+        .page-select { appearance: none; -webkit-appearance: none; padding: 4px 24px 4px 8px; border: 1px solid #d1d5db; border-radius: 4px; outline: none; margin-left: 8px; background-color: white; background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280' stroke-width='2'%3e%3cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3e%3c/svg%3e"); background-repeat: no-repeat; background-position: right 4px center; background-size: 12px; font-size: 13px; }
+
+        /* ================= 进度列表样式 ================= */
+        .progress-list { min-height: 200px; }
+        .progress-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #f0f0f0; transition: background 0.2s; }
+        .progress-item:last-child { border-bottom: none; }
+        .progress-item:hover { background: #fafafa; }
+        .file-info { display: flex; align-items: center; gap: 12px; }
+        .file-icon { width: 32px; height: 32px; background: #e6f7ff; color: #1890ff; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+        .file-name { font-size: 14px; font-weight: 500; color: #333; }
+        .file-size { font-size: 12px; color: #999; margin-top: 2px; }
+        .file-status { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; }
+        .status-waiting { color: var(--waiting-text); }
+        .status-processing { color: var(--processing-text); display: flex; align-items: center; gap: 6px; }
+        .status-completed { color: var(--success-text); display: flex; align-items: center; gap: 6px; }
+        /* 列表中的失败状态也使用新的纯文本风格，但这里可能需要图标辅助 */
+        .status-error-icon { color: var(--error-text); display: flex; align-items: center; gap: 6px; }
+
+        .progress-bar-bg { width: 100px; height: 4px; background: #f0f0f0; border-radius: 2px; overflow: hidden; margin-left: 10px; }
+        .progress-bar-fill { height: 100%; background: var(--primary); transition: width 0.3s ease; width: 0%; }
+        .progress-bar-fill.done { background: var(--success-text); }
+        .progress-bar-fill.error { background: var(--error-text); }
+
+        .filter-toolbar { display: flex; align-items: center; gap: 10px; }
+        .filter-select { appearance: none; -webkit-appearance: none; padding: 4px 24px 4px 10px; border: 1px solid #d1d5db; border-radius: 4px; outline: none; background-color: white; background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280' stroke-width='2'%3e%3cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3e%3c/svg%3e"); background-repeat: no-repeat; background-position: right 6px center; background-size: 12px; font-size: 12px; height: 28px; color: #555; }
+
+        .drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 40; opacity: 0; pointer-events: none; transition: 0.3s; }
+        .drawer { position: fixed; top: 0; right: 0; height: 100%; width: 600px; max-width: 90%; background: white; z-index: 50; transform: translateX(100%); transition: 0.3s cubic-bezier(0.16, 1, 0.3, 1); box-shadow: -4px 0 24px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+        .drawer.open { transform: translateX(0); }
+        .drawer-overlay.open { opacity: 1; pointer-events: auto; }
+
+        .drawer-header { padding: 20px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: #f9fafb; }
+        .drawer-content { flex: 1; overflow-y: auto; padding: 24px; }
+        .drawer-footer { padding: 16px 24px; border-top: 1px solid var(--border-color); text-align: right; }
+
+        .code-block { background: #1f2937; color: #e5e7eb; padding: 16px; border-radius: 8px; overflow-x: auto; font-family: monospace; font-size: 12px; margin-top: 8px; }
+
+        .hidden { display: none !important; }
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        @media (max-width: 768px) {
+            .sidebar { position: fixed; height: 100%; z-index: 30; transform: translateX(-100%); }
+            .sidebar.open { transform: translateX(0); }
+            .header { padding: 0 16px; }
+            .content-scroll { padding: 16px; }
+            .mobile-menu-btn { display: block; margin-right: 12px; cursor: pointer; }
+            .header-right { gap: 12px; }
+        }
+        @media (min-width: 769px) {
+            .mobile-menu-btn { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+        <div class="logo-box">FD</div>
+        <span>FinDebug</span>
+    </div>
+    <nav class="nav-menu" id="nav-menu"></nav>
+    <div class="sidebar-footer">
+        v1.9.0 (样式修复版)
+    </div>
+</aside>
+
+<div class="main-content">
+    <div class="drawer-overlay" id="drawer-overlay"></div>
+
+    <header class="header">
+        <div style="display:flex; align-items:center;">
+            <button class="mobile-menu-btn" id="mobile-menu-btn">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+            </button>
+            <h2 class="page-title" id="header-title">仪表盘</h2>
+        </div>
+
+        <div class="header-right">
+            <div class="env-selector">
+                <label for="env-select" style="font-size:14px; font-weight:500; color:#666;">环境:</label>
+                <select id="env-select" class="env-select">
+                    <option value="DEV">DEV (开发)</option>
+                    <option value="TEST">TEST (测试)</option>
+                    <option value="PROD">PROD (生产)</option>
+                </select>
+            </div>
+        </div>
+    </header>
+
+    <main class="content-scroll" id="main-container"></main>
+</div>
+
+<div class="drawer" id="json-drawer">
+    <div class="drawer-header">
+        <div>
+            <h3 style="font-size:16px; font-weight:600; display:flex; align-items:center; gap:8px;">
+                交易详情
+                <span id="drawer-status" class="status-badge"></span>
+            </h3>
+            <div style="font-size:12px; color:#666; margin-top:4px;">
+                <span id="drawer-id"></span> | <span id="drawer-time"></span>ms
+            </div>
+        </div>
+        <button onclick="closeDrawer()" style="background:none; border:none; cursor:pointer; color:#666;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+    </div>
+    <div class="drawer-content">
+        <div id="drawer-alert" style="padding:12px; border-radius:6px; margin-bottom:20px; border:1px solid transparent; display:flex; gap:10px;"></div>
+        <h4 style="font-size:13px; font-weight:600; text-transform:uppercase; color:#6b7280; margin-bottom:8px;">请求载荷 (Request Payload)</h4>
+        <div id="drawer-req" class="code-block"></div>
+        <h4 style="font-size:13px; font-weight:600; text-transform:uppercase; color:#6b7280; margin-bottom:8px; margin-top:20px;">响应载荷 (Response Payload)</h4>
+        <div id="drawer-res" class="code-block"></div>
+    </div>
+    <div class="drawer-footer">
+        <button onclick="closeDrawer()" style="padding:8px 16px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer;">关闭</button>
+    </div>
+</div>
+
+<script>
+    const Icons = {
+        apply: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>',
+        approve: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>',
+        sign: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"></path><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path><path d="M2 2l7.586 7.586"></path><circle cx="11" cy="11" r="2"></circle></svg>',
+        withdraw: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>',
+        repay: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>',
+        query: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>',
+        auto: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>',
+        upload: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>',
+        play: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>',
+        eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>'
+    };
+
+    const createStandardConfig = (title, endpoint) => ({
+        title,
+        description: `针对 ${title} 操作的调试接口。`,
+        endpoint,
+        method: 'POST',
+        fields: [
+            { name: 'referenceId', label: '关联业务 ID', type: 'text', required: true },
+            { name: 'actionCode', label: '操作指令码', type: 'text' }
+        ]
+    });
+
+    const Pages = {
+        withdraw: {
+            title: '资金提现',
+            description: '执行客户账户的资金提现请求。',
+            endpoint: '/transaction/withdraw',
+            method: 'POST',
+            fields: [
+                { name: 'customerId', label: '客户 ID', type: 'text', placeholder: 'CUST-001', required: true },
+                { name: 'accountId', label: '银行账号', type: 'text', placeholder: 'ACC-8888-9999', required: true },
+                { name: 'amount', label: '提现金额', type: 'number', placeholder: '0.00', required: true },
+                { name: 'currency', label: '币种', type: 'select', options: [{ label: '美元 (USD)', value: 'USD' }, { label: '欧元 (EUR)', value: 'EUR' }, { label: '人民币 (CNY)', value: 'CNY' }], defaultValue: 'USD', required: true },
+                { name: 'reason', label: '提现原因', type: 'text', placeholder: '客户主动申请' },
+                { name: 'executionDate', label: '执行日期', type: 'date', required: true },
+            ]
+        },
+        apply: {
+            title: '流程申请',
+            description: '发起新的贷款或金融服务申请流程。',
+            endpoint: '/process/apply',
+            method: 'POST',
+            fields: [
+                { name: 'applicantName', label: '申请人姓名', type: 'text', required: true },
+                { name: 'productType', label: '产品类型', type: 'select', options: [{ label: '个人消费贷', value: 'PL' }, { label: '按揭贷款', value: 'MORT' }], required: true },
+                { name: 'requestedAmount', label: '申请金额', type: 'number', required: true },
+            ]
+        },
+        upload: {
+            title: '文件上传',
+            description: '批量上传文件至后端处理（支持断点续传模拟）。',
+            endpoint: '/file/batch-upload',
+            method: 'POST',
+            fields: [
+                { name: 'uploader', label: '上传人', type: 'select', options: [{label:'Admin', value:'admin'}, {label:'User', value:'user'}], required: true },
+                { name: 'files', label: '选择文件', type: 'file', multiple: true, required: true }
+            ]
+        }
+    };
+
+    Pages.approve = createStandardConfig('流程审批', '/process/approve');
+    Pages.sign = createStandardConfig('数据签约', '/data/sign');
+    Pages.repay = createStandardConfig('还款交易', '/transaction/repay');
+    Pages.query = { ...createStandardConfig('数据查询', '/data/query'), method: 'GET' };
+    Pages.auto = createStandardConfig('批量自动运行', '/batch/execute');
+
+    const ApiService = {
+        env: 'DEV',
+        baseUrls:'',
+        // baseUrls: {
+        //     DEV: 'https://api-dev.findebug.com/v1',
+        // },
+        setEnv(env) { this.env = env; console.log(`环境切换至 ${env}`); },
+
+        async execute(endpoint, method, payload) {
+            const start = Date.now();
+            const baseUrl = this.baseUrls
+            const url = `${baseUrl}${endpoint}`;
+
+            let status = 'PENDING';
+            let summary = '';
+            let responsePayload = null;
+
+            try {
+                console.log(`[真实 API 请求] ${method} ${url}`, payload);
+                const res = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: method !== 'GET' ? JSON.stringify(payload) : undefined
+                });
+
+                if (!res.ok) {
+                    if(res.status === 404 || res.status === 502) throw new Error('页面接口未开通');
+                    throw new Error(`HTTP 错误: ${res.status}`);
+                }
+                const data = await res.json();
+                status = 'SUCCESS';
+                summary = '交易执行成功';
+                responsePayload = data;
+
+            } catch (error) {
+                console.warn("API 请求失败 (预期内):", error);
+                status = 'ERROR';
+                summary = '页面接口未开通';
+                responsePayload = {
+                    code: 500,
+                    message: error.message === 'Failed to fetch' ? '网络请求失败 (域名不存在/跨域)' : error.message,
+                    targetUrl: url
+                };
+            }
+
+            const end = Date.now();
+            return {
+                id: 'REQ-' + Date.now() + '-' + Math.floor(Math.random() * 1000),                status: status,
+                timestamp: new Date().toISOString(),
+                summary: summary,
+                requestPayload: payload,
+                responsePayload: responsePayload,
+                environment: this.env,
+                latencyMs: end - start
+            };
+        }
+    };
+
+    let State = {
+        route: 'withdraw',
+        formData: {},
+        records: [],
+        pagination: { current: 1, size: 10 },
+        uploadTasks: [],
+        uploadFilter: 'ALL',
+        uploadPagination: { current: 1, size: 5 }
+    };
+
+    function init() {
+        renderNav();
+        handleHashChange();
+        window.addEventListener('hashchange', handleHashChange);
+
+        document.getElementById('mobile-menu-btn').onclick = () => {
+            document.getElementById('sidebar').classList.toggle('open');
+        };
+        document.querySelector('.main-content').onclick = (e) => {
+            if(e.target.id !== 'mobile-menu-btn') document.getElementById('sidebar').classList.remove('open');
+        };
+
+        const envSelect = document.getElementById('env-select');
+        envSelect.onchange = (e) => { ApiService.setEnv(e.target.value); };
+        envSelect.value = ApiService.env;
+    }
+
+    function handleHashChange() {
+        const hash = window.location.hash.replace('#', '') || 'withdraw';
+        if (Pages[hash]) {
+            State.route = hash;
+            State.formData = {};
+            State.records = [];
+            State.uploadTasks = [];
+            State.pagination.current = 1;
+            renderNav();
+            renderPage();
+        } else {
+            window.location.hash = 'withdraw';
+        }
+    }
+
+    function renderNav() {
+        const nav = document.getElementById('nav-menu');
+        nav.innerHTML = Object.keys(Pages).map(key => {
+            const icon = Icons[key] || Icons.play;
+            return `
+            <a href="#${key}" class="nav-item ${State.route === key ? 'active' : ''}">
+                ${icon}
+                ${Pages[key].title}
+            </a>
+            `;
+        }).join('');
+
+        const config = Pages[State.route];
+        document.getElementById('header-title').textContent = config.title;
+    }
+
+    function renderPage() {
+        const config = Pages[State.route];
+        const container = document.getElementById('main-container');
+
+        config.fields.forEach(f => {
+            if(!State.formData[f.name]) State.formData[f.name] = f.defaultValue || '';
+        });
+
+        const isUploadPage = State.route === 'upload';
+
+        const html = `
+            <div class="container">
+                <div class="page-header">
+                    <div>
+                        <h1 class="ph-title">${config.title}</h1>
+                        <p class="ph-desc">${config.description}</p>
+                    </div>
+                    <div>
+                        <span class="api-badge">${config.method} ${config.endpoint}</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+                            ${isUploadPage ? '文件上传配置' : '请求参数表单'}
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-grid">
+                            ${config.fields.map(field => `
+                                <div class="form-group">
+                                    <label class="label">${field.label} ${field.required ? '<span class="required">*</span>' : ''}</label>
+                                    ${field.type === 'select'
+            ? `<select class="select" onchange="updateField('${field.name}', this.value)">
+                                            ${field.options.map(o => `<option value="${o.value}" ${State.formData[field.name] === o.value ? 'selected' : ''}>${o.label}</option>`).join('')}
+                                           </select>`
+            : field.type === 'file'
+                ? `<input type="file" class="input" ${field.multiple ? 'multiple' : ''} onchange="updateFileField('${field.name}', this.files)">`
+                : `<input type="${field.type}" class="input" placeholder="${field.placeholder || ''}"
+                                                value="${State.formData[field.name] || ''}"
+                                                oninput="updateField('${field.name}', this.value)">`
+        }
+                                </div>
+                            `).join('')}
+                        </div>
+
+                        <div class="form-footer">
+                            <button class="btn-submit" id="btn-submit" onclick="submitForm()">
+                                ${Icons.play} <span>${isUploadPage ? '开始上传' : '提交并执行'}</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                ${isUploadPage
+            ? `<div class="card" id="upload-progress-card" style="display:none;">
+                        <div class="card-header">
+                            <div class="card-title">
+                                <span>文件处理控制台</span>
+                                <div class="filter-toolbar">
+                                    <select class="filter-select" onchange="changeUploadFilter(this.value)">
+                                        <option value="ALL">全部状态</option>
+                                        <option value="SUCCESS">仅成功</option>
+                                        <option value="FAIL">仅失败</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div style="font-size:12px; color:#666;">模拟后端处理队列</div>
+                        </div>
+                        <div class="progress-list" id="progress-list"></div>
+                        <div class="pagination" id="upload-pagination-controls"></div>
+                       </div>`
+            : `<div class="card" id="results-card" style="display: ${State.records.length ? 'block' : 'none'}">
+                        <div class="card-header">
+                            <div class="card-title">执行历史记录</div>
+                        </div>
+                        <div class="table-container">
+                            <table id="results-table">
+                                <thead>
+                                    <tr>
+                                        <th>状态</th>
+                                        <th>时间</th>
+                                        <th>摘要</th>
+                                        <th>耗时</th>
+                                        <th style="text-align:right">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="results-body"></tbody>
+                            </table>
+                        </div>
+                        <div class="pagination" id="pagination-controls"></div>
+                       </div>`
+        }
+            </div>
+        `;
+
+        container.innerHTML = html;
+        if (!isUploadPage) {
+            renderRecords();
+        }
+    }
+
+    function updateField(name, value) {
+        State.formData[name] = value;
+    }
+
+    function updateFileField(name, files) {
+        State.formData[name] = files;
+    }
+
+    async function submitForm() {
+        const btn = document.getElementById('btn-submit');
+
+        if (State.route === 'upload') {
+            handleUploadSimulation(btn);
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = `<svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg> <span>执行中...</span>`;
+
+        const config = Pages[State.route];
+        try {
+            const result = await ApiService.execute(config.endpoint, config.method, State.formData);
+            State.records.unshift(result);
+            State.pagination.current = 1;
+            renderRecords();
+        } catch (e) {
+            alert('执行出错');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = `${Icons.play} <span>提交并执行</span>`;
+        }
+    }
+
+    function handleUploadSimulation(btn) {
+        const files = State.formData['files'];
+        if (!files || files.length === 0) {
+            alert('请先选择文件');
+            return;
+        }
+
+        const card = document.getElementById('upload-progress-card');
+        card.style.display = 'block';
+
+        btn.disabled = true;
+        btn.innerHTML = `<span>正在上传处理...</span>`;
+
+        State.uploadTasks = Array.from(files).map((file, index) => ({
+            id: `file-${Date.now()}-${index}`,
+            name: file.name,
+            size: file.size,
+            status: 'WAITING',
+            progress: 0
+        }));
+        State.uploadPagination.current = 1;
+
+        renderUploadList();
+
+        let currentIndex = 0;
+
+        function processNext() {
+            if (currentIndex >= State.uploadTasks.length) {
+                btn.disabled = false;
+                btn.innerHTML = `${Icons.play} <span>开始上传</span>`;
+                return;
+            }
+
+            State.uploadTasks[currentIndex].status = 'PROCESSING';
+            State.uploadTasks[currentIndex].progress = 60;
+            renderUploadList();
+
+            setTimeout(() => {
+                const isSuccess = Math.random() > 0.2;
+
+                State.uploadTasks[currentIndex].status = isSuccess ? 'SUCCESS' : 'FAIL';
+                State.uploadTasks[currentIndex].progress = 100;
+
+                renderUploadList();
+
+                currentIndex++;
+                processNext();
+            }, 300 + Math.random() * 800);
+        }
+
+        processNext();
+    }
+
+    function renderUploadList() {
+        const listContainer = document.getElementById('progress-list');
+        const paginationControls = document.getElementById('upload-pagination-controls');
+        if (!listContainer) return;
+
+        const filtered = State.uploadTasks.filter(task => {
+            if (State.uploadFilter === 'ALL') return true;
+            if (State.uploadFilter === 'SUCCESS') return task.status === 'SUCCESS';
+            if (State.uploadFilter === 'FAIL') return task.status === 'FAIL';
+            return true;
+        });
+
+        const total = filtered.length;
+        const size = State.uploadPagination.size;
+        const totalPages = Math.ceil(total / size) || 1;
+
+        if (State.uploadPagination.current > totalPages) State.uploadPagination.current = totalPages;
+        const current = State.uploadPagination.current;
+
+        const start = (current - 1) * size;
+        const end = start + size;
+        const visibleTasks = filtered.slice(start, end);
+
+        if (visibleTasks.length === 0) {
+            listContainer.innerHTML = `<div style="padding:20px; text-align:center; color:#999;">暂无数据</div>`;
+        } else {
+            listContainer.innerHTML = visibleTasks.map(task => {
+                let statusHtml = '';
+                let progressClass = 'progress-bar-fill';
+
+                if (task.status === 'WAITING') {
+                    statusHtml = `<span class="status-text status-waiting">等待中...</span>`;
+                } else if (task.status === 'PROCESSING') {
+                    statusHtml = `<span class="status-text status-processing"><svg class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg> 处理中...</span>`;
+                } else if (task.status === 'SUCCESS') {
+                    statusHtml = `<span class="status-badge status-success">成功</span>`;
+                    progressClass += ' done';
+                } else if (task.status === 'FAIL') {
+                    statusHtml = `<span class="status-badge status-error">失败</span>`;
+                    progressClass += ' error';
+                }
+
+                return `
+                    <div class="progress-item">
+                        <div class="file-info">
+                            <div class="file-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                            </div>
+                            <div>
+                                <div class="file-name">${task.name}</div>
+                                <div class="file-size">${(task.size / 1024).toFixed(1)} KB</div>
+                            </div>
+                        </div>
+                        <div class="file-status">
+                            ${statusHtml}
+                            <div class="progress-bar-bg"><div class="${progressClass}" style="width:${task.progress}%"></div></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        paginationControls.innerHTML = `
+            <span>共 ${total} 条</span>
+            <select class="page-select" onchange="changeUploadPageSize(this.value)">
+                <option value="5" ${size == 5 ? 'selected' : ''}>5 条/页</option>
+                <option value="10" ${size == 10 ? 'selected' : ''}>10 条/页</option>
+            </select>
+            <button class="page-btn" ${current === 1 ? 'disabled' : ''} onclick="changeUploadPage(-1)">上一页</button>
+            <span>第 ${current} / ${totalPages} 页</span>
+            <button class="page-btn" ${current >= totalPages ? 'disabled' : ''} onclick="changeUploadPage(1)">下一页</button>
+        `;
+    }
+
+    function changeUploadFilter(val) {
+        State.uploadFilter = val;
+        State.uploadPagination.current = 1;
+        renderUploadList();
+    }
+
+    function changeUploadPage(delta) {
+        State.uploadPagination.current += delta;
+        renderUploadList();
+    }
+
+    function changeUploadPageSize(val) {
+        State.uploadPagination.size = parseInt(val);
+        State.uploadPagination.current = 1;
+        renderUploadList();
+    }
+
+    function renderRecords() {
+        const tableBody = document.getElementById('results-body');
+        const card = document.getElementById('results-card');
+        const paginationControls = document.getElementById('pagination-controls');
+
+        if (State.records.length === 0) {
+            card.style.display = 'none';
+            return;
+        }
+
+        card.style.display = 'block';
+
+        const total = State.records.length;
+        const size = State.pagination.size;
+        const current = State.pagination.current;
+        const totalPages = Math.ceil(total / size);
+
+        const start = (current - 1) * size;
+        const end = start + size;
+        const visibleRecords = State.records.slice(start, end);
+
+        tableBody.innerHTML = visibleRecords.map((r, index) => `
+            <tr>
+                <td><span class="status-badge ${r.status === 'SUCCESS' ? 'status-success' : 'status-error'}">${r.status === 'SUCCESS' ? '成功' : '失败'}</span></td>
+                <td style="color:#6b7280">${new Date(r.timestamp).toLocaleTimeString()}</td>
+                <td style="font-weight:500">${r.summary}</td>
+                <td style="font-family:monospace; color:#6b7280">${r.latencyMs}ms</td>
+                <td style="text-align:right;">
+                    <button class="btn-link" onclick="openDrawer(${start + index})">
+                        ${Icons.eye} 查看详情
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+
+        paginationControls.innerHTML = `
+            <span>共 ${total} 条</span>
+            <select class="page-select" onchange="changePageSize(this.value)">
+                <option value="5" ${size == 5 ? 'selected' : ''}>5 条/页</option>
+                <option value="10" ${size == 10 ? 'selected' : ''}>10 条/页</option>
+            </select>
+            <button class="page-btn" ${current === 1 ? 'disabled' : ''} onclick="changePage(-1)">上一页</button>
+            <span>第 ${current} / ${totalPages || 1} 页</span>
+            <button class="page-btn" ${current >= totalPages ? 'disabled' : ''} onclick="changePage(1)">下一页</button>
+        `;
+    }
+
+    function changePage(delta) {
+        State.pagination.current += delta;
+        renderRecords();
+    }
+
+    function changePageSize(newSize) {
+        State.pagination.size = parseInt(newSize);
+        State.pagination.current = 1;
+        renderRecords();
+    }
+
+    function openDrawer(realIndex) {
+        const record = State.records[realIndex];
+        const drawer = document.getElementById('json-drawer');
+        const overlay = document.getElementById('drawer-overlay');
+
+        document.getElementById('drawer-status').textContent = record.status === 'SUCCESS' ? '成功' : '失败';
+        document.getElementById('drawer-status').className = `status-badge ${record.status === 'SUCCESS' ? 'status-success' : 'status-error'}`;
+        document.getElementById('drawer-id').textContent = `ID: ${record.id}`;
+        document.getElementById('drawer-time').textContent = record.latencyMs;
+
+        const alertBox = document.getElementById('drawer-alert');
+        alertBox.className = record.status === 'SUCCESS' ? 'status-success' : 'status-error';
+        alertBox.innerHTML = `
+            ${record.status === 'SUCCESS'
+            ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>'
+            : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>'}
+            <div>
+                <div style="font-weight:bold">${record.status === 'SUCCESS' ? '执行成功' : '执行失败'}</div>
+                <div style="font-size:12px">${record.summary}</div>
+            </div>
+        `;
+
+        document.getElementById('drawer-req').textContent = JSON.stringify(record.requestPayload, null, 2);
+        document.getElementById('drawer-res').textContent = JSON.stringify(record.responsePayload, null, 2);
+
+        overlay.classList.add('open');
+        drawer.classList.add('open');
+        overlay.onclick = closeDrawer;
+    }
+
+    function closeDrawer() {
+        document.getElementById('json-drawer').classList.remove('open');
+        document.getElementById('drawer-overlay').classList.remove('open');
+    }
+
+    init();
+</script>
+</body>
+</html>
